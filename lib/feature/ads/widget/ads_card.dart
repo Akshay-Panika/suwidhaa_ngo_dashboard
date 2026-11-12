@@ -1,14 +1,13 @@
 import 'dart:async';
-import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb, Uint8List;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
-import 'package:shimmer/shimmer.dart';
 import 'package:video_player/video_player.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
+import 'package:youtube_player_iframe/youtube_player_iframe.dart';
 import '../../../core/constant/app_color.dart';
 import '../../../core/widget/flutter_toast.dart';
 import '../controller/ads_controller.dart';
@@ -18,13 +17,12 @@ import '../model/ads_model.dart';
 String? extractYoutubeId(String raw) {
   final uri = Uri.tryParse(raw.trim());
   if (uri == null || uri.host.isEmpty) return null;
-
   final host = uri.host.toLowerCase();
   String? id;
-
   if (host == 'youtu.be' || host == 'www.youtu.be') {
     id = uri.pathSegments.isNotEmpty ? uri.pathSegments.first : null;
-  } else if (host.endsWith('youtube.com') || host.endsWith('youtube-nocookie.com')) {
+  } else if (host.endsWith('youtube.com') ||
+      host.endsWith('youtube-nocookie.com')) {
     if (uri.queryParameters['v'] != null) {
       id = uri.queryParameters['v'];
     } else if (uri.pathSegments.length >= 2 &&
@@ -32,13 +30,12 @@ String? extractYoutubeId(String raw) {
       id = uri.pathSegments[1];
     }
   }
-
   if (id != null && RegExp(r'^[a-zA-Z0-9_-]{11}$').hasMatch(id)) return id;
   return null;
 }
 
 // ═════════════════════════════════════════════════════════
-//  SELF-CONTAINED VIDEO PLAYER (No Auto-play)
+//  SELF-CONTAINED VIDEO PLAYER
 // ═════════════════════════════════════════════════════════
 class _CachedStream {
   final String url;
@@ -49,7 +46,7 @@ class _CachedStream {
 class _AdsVideoPlayer extends StatefulWidget {
   final String url;
   final String title;
-  final String? thumbnailUrl; // ✅ Added thumbnail parameter
+  final String? thumbnailUrl;
   final bool isFullscreen;
   final VoidCallback onToggleFullscreen;
 
@@ -83,18 +80,29 @@ class _AdsVideoPlayerState extends State<_AdsVideoPlayer> {
   int _token = 0;
   Timer? _hideTimer;
 
+  bool get _isWebYouTube =>
+      kIsWeb && extractYoutubeId(widget.url) != null;
+
   @override
   void initState() {
     super.initState();
+    if (_isWebYouTube) {
+      // Use youtube_player_iframe on web — no video_player init needed.
+      _loading = false;
+      return;
+    }
     _init();
   }
 
   @override
   void didUpdateWidget(covariant _AdsVideoPlayer oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.url != widget.url) {
-      _init();
+    if (oldWidget.url == widget.url) return;
+    if (_isWebYouTube) {
+      _loading = false;
+      return;
     }
+    _init();
   }
 
   @override
@@ -128,7 +136,8 @@ class _AdsVideoPlayerState extends State<_AdsVideoPlayer> {
 
       streams.sort((a, b) =>
           a.videoResolution.height.compareTo(b.videoResolution.height));
-      final upTo720 = streams.where((s) => s.videoResolution.height <= 720).toList();
+      final upTo720 =
+      streams.where((s) => s.videoResolution.height <= 720).toList();
       final chosen = upTo720.isNotEmpty ? upTo720.last : streams.first;
 
       final resolved = chosen.url.toString();
@@ -172,8 +181,6 @@ class _AdsVideoPlayerState extends State<_AdsVideoPlayer> {
       c.setLooping(false);
       c.setVolume(_muted ? 0 : 1);
       c.addListener(_onTick);
-
-      // ❌ Auto-play disabled
 
       setState(() {
         _vc = c;
@@ -274,17 +281,23 @@ class _AdsVideoPlayerState extends State<_AdsVideoPlayer> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isWebYouTube) {
+      return _WebYoutubePlayer(
+        key: ValueKey(extractYoutubeId(widget.url)),
+        videoId: extractYoutubeId(widget.url)!,
+        isFullscreen: widget.isFullscreen,
+        onToggleFullscreen: widget.onToggleFullscreen,
+      );
+    }
     return ColoredBox(color: Colors.black, child: _buildBody());
   }
 
   Widget _buildBody() {
     if (_error) return _buildError();
-
     final c = _vc;
     if (_loading || c == null || !c.value.isInitialized) {
-      return _buildLoadingCover(); // ✅ Shows image + spinner
+      return _buildLoadingCover();
     }
-
     return Stack(
       fit: StackFit.expand,
       children: [
@@ -312,7 +325,6 @@ class _AdsVideoPlayerState extends State<_AdsVideoPlayer> {
     );
   }
 
-  // ✅ NEW: Loading cover with Image and Spinner
   Widget _buildLoadingCover() {
     return Stack(
       fit: StackFit.expand,
@@ -325,8 +337,6 @@ class _AdsVideoPlayerState extends State<_AdsVideoPlayer> {
           )
         else
           Container(color: Colors.black),
-
-        // Dark overlay for better spinner visibility
         Container(
           color: Colors.black.withOpacity(0.4),
           child: const Center(
@@ -348,7 +358,8 @@ class _AdsVideoPlayerState extends State<_AdsVideoPlayer> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.error_outline, color: Colors.redAccent, size: 34),
+                const Icon(Icons.error_outline,
+                    color: Colors.redAccent, size: 34),
                 const SizedBox(height: 6),
                 const Text(
                   'Could not play this video.\nCheck the link or your internet.',
@@ -448,7 +459,6 @@ class _AdsVideoPlayerState extends State<_AdsVideoPlayer> {
     final bufMs = v.buffered.isNotEmpty
         ? v.buffered.last.end.inMilliseconds.toDouble().clamp(0.0, totalMs)
         : 0.0;
-
     final shownPos = Duration(milliseconds: posMs.round());
 
     final content = Column(
@@ -480,7 +490,9 @@ class _AdsVideoPlayerState extends State<_AdsVideoPlayer> {
               IconButton(
                 onPressed: _toggleMute,
                 icon: Icon(
-                  _muted ? Icons.volume_off_rounded : Icons.volume_up_rounded,
+                  _muted
+                      ? Icons.volume_off_rounded
+                      : Icons.volume_up_rounded,
                   color: Colors.white,
                 ),
               ),
@@ -574,7 +586,9 @@ class _AdsVideoPlayerState extends State<_AdsVideoPlayer> {
               IconButton(
                 onPressed: widget.onToggleFullscreen,
                 icon: Icon(
-                  fs ? Icons.fullscreen_exit_rounded : Icons.fullscreen_rounded,
+                  fs
+                      ? Icons.fullscreen_exit_rounded
+                      : Icons.fullscreen_rounded,
                   color: Colors.white,
                 ),
               ),
@@ -590,7 +604,7 @@ class _AdsVideoPlayerState extends State<_AdsVideoPlayer> {
   Widget _circleButton(IconData icon, double size, VoidCallback onTap,
       {bool filled = false}) {
     return Material(
-      color: filled ? Colors.black45 : Colors.black45,
+      color: Colors.black45,
       shape: const CircleBorder(),
       child: InkWell(
         customBorder: const CircleBorder(),
@@ -604,8 +618,73 @@ class _AdsVideoPlayerState extends State<_AdsVideoPlayer> {
   }
 }
 
-// ═════════════════════════════════════════════════════════
-//  ADS CARD
+class _WebYoutubePlayer extends StatefulWidget {
+  final String videoId;
+  final bool isFullscreen;
+  final VoidCallback onToggleFullscreen;
+
+  const _WebYoutubePlayer({
+    super.key,
+    required this.videoId,
+    required this.isFullscreen,
+    required this.onToggleFullscreen,
+  });
+
+  @override
+  State<_WebYoutubePlayer> createState() => _WebYoutubePlayerState();
+}
+
+class _WebYoutubePlayerState extends State<_WebYoutubePlayer> {
+  late YoutubePlayerController _controller;   // ← Youtube, not YouTube
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = YoutubePlayerController.fromVideoId(   // ← Youtube
+      videoId: widget.videoId,
+      autoPlay: false,
+      params: const YoutubePlayerParams(               // ← Youtube
+        showControls: true,
+        showFullscreenButton: true,
+        mute: false,
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.close();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        YoutubePlayer(                                  // ← Youtube
+          controller: _controller,
+          aspectRatio: 16 / 9,
+        ),
+        if (widget.isFullscreen)
+          SafeArea(
+            child: Align(
+              alignment: Alignment.topLeft,
+              child: IconButton(
+                onPressed: widget.onToggleFullscreen,
+                icon: const Icon(
+                  Icons.arrow_back_ios_new_rounded,
+                  color: Colors.white,
+                  size: 20,
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
 // ═════════════════════════════════════════════════════════
 class AdsCard extends StatefulWidget {
   const AdsCard({super.key});
@@ -621,8 +700,7 @@ class _AdsCardState extends State<AdsCard> {
   bool isAdding = false;
   bool _isFullscreen = false;
 
-  // ── Image picker ──
-  File? _imageFile;
+  // ── Image bytes (works on web & mobile) ──
   Uint8List? _imageBytes;
   String? _imageName;
 
@@ -689,19 +767,13 @@ class _AdsCardState extends State<AdsCard> {
       final res = await FilePicker.platform.pickFiles(
         type: FileType.image,
         allowMultiple: false,
-        withData: kIsWeb,
+        withData: true, // ← bytes always available (web + mobile)
       );
       if (res == null || res.files.isEmpty) return;
       final f = res.files.single;
       setState(() {
         _imageName = f.name;
-        if (kIsWeb) {
-          _imageBytes = f.bytes;
-          _imageFile = null;
-        } else {
-          _imageFile = f.path != null ? File(f.path!) : null;
-          _imageBytes = null;
-        }
+        _imageBytes = f.bytes;
       });
     } catch (e) {
       FlutterToast.error('Could not pick image: $e');
@@ -743,7 +815,6 @@ class _AdsCardState extends State<AdsCard> {
     setState(() {
       isEditing = false;
       isAdding = false;
-      _imageFile = null;
       _imageBytes = null;
       _imageName = null;
       _titleCtrl.clear();
@@ -765,7 +836,6 @@ class _AdsCardState extends State<AdsCard> {
     setState(() {
       isAdding = true;
       isEditing = false;
-      _imageFile = null;
       _imageBytes = null;
       _imageName = null;
       _titleCtrl.clear();
@@ -778,7 +848,6 @@ class _AdsCardState extends State<AdsCard> {
     setState(() {
       isAdding = false;
       isEditing = true;
-      _imageFile = null;
       _imageBytes = null;
       _imageName = null;
       _titleCtrl.text = ad.title;
@@ -798,9 +867,8 @@ class _AdsCardState extends State<AdsCard> {
     final ad = controller.selectedAd.value;
     final hasExistingImage = isEditing &&
         (ad?.hasImage ?? false) &&
-        _imageFile == null &&
         _imageBytes == null;
-    final hasNewImage = _imageFile != null || _imageBytes != null;
+    final hasNewImage = _imageBytes != null;
     final hasVideo = videoUrl.isNotEmpty;
 
     if (!hasExistingImage && !hasNewImage && !hasVideo) {
@@ -814,19 +882,15 @@ class _AdsCardState extends State<AdsCard> {
         title: title,
         videoUrl: hasVideo ? videoUrl : null,
         isActive: true,
-        imageFile: _imageFile,
         imageBytes: _imageBytes,
         imageName: _imageName,
       );
-      if (ok && controller.ads.isNotEmpty) {
-        _selectAd(controller.ads.first);
-      }
+      if (ok && controller.ads.isNotEmpty) _selectAd(controller.ads.first);
     } else if (isEditing && ad != null) {
       ok = await controller.updateAd(
         id: ad.id,
         title: title,
         videoUrl: videoUrl.isEmpty ? null : videoUrl,
-        imageFile: _imageFile,
         imageBytes: _imageBytes,
         imageName: _imageName,
       );
@@ -838,7 +902,6 @@ class _AdsCardState extends State<AdsCard> {
       setState(() {
         isAdding = false;
         isEditing = false;
-        _imageFile = null;
         _imageBytes = null;
         _imageName = null;
         _titleCtrl.clear();
@@ -867,9 +930,7 @@ class _AdsCardState extends State<AdsCard> {
     if (confirmed != true) return;
     if (_isFullscreen) _setFullscreen(false);
     await controller.deleteAd(id);
-    if (controller.selectedAd.value == null) {
-      _resetState();
-    }
+    if (controller.selectedAd.value == null) _resetState();
   }
 
   // ═════════════════════════════════════════════════════════
@@ -1060,7 +1121,9 @@ class _AdsCardState extends State<AdsCard> {
       itemCount: filtered.length,
       itemBuilder: (context, i) {
         final ad = filtered[i];
-        final isSelected = controller.selectedAd.value?.id == ad.id && !isEditing && !isAdding;
+        final isSelected = controller.selectedAd.value?.id == ad.id &&
+            !isEditing &&
+            !isAdding;
 
         return Card(
           elevation: 0,
@@ -1270,9 +1333,8 @@ class _AdsCardState extends State<AdsCard> {
           children: [
             Icon(
               Icons.calendar_month,
-              color: _filterDate != null
-                  ? AppColor.primary
-                  : AppColor.textGrey,
+              color:
+              _filterDate != null ? AppColor.primary : AppColor.textGrey,
               size: 18,
             ),
             if (_filterDate != null) ...[
@@ -1360,10 +1422,9 @@ class _AdsCardState extends State<AdsCard> {
                   fontSize: 20, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 24),
-
             const Text('Ad Title *',
-                style:
-                TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                style: TextStyle(
+                    fontWeight: FontWeight.bold, fontSize: 13)),
             const SizedBox(height: 8),
             TextField(
               controller: _titleCtrl,
@@ -1380,10 +1441,9 @@ class _AdsCardState extends State<AdsCard> {
               ),
             ),
             const SizedBox(height: 16),
-
             const Text('Banner Image',
-                style:
-                TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                style: TextStyle(
+                    fontWeight: FontWeight.bold, fontSize: 13)),
             const SizedBox(height: 8),
             GestureDetector(
               onTap: _pickImage,
@@ -1408,10 +1468,9 @@ class _AdsCardState extends State<AdsCard> {
               ),
             ],
             const SizedBox(height: 16),
-
             const Text('Video URL (MP4 or YouTube)',
-                style:
-                TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                style: TextStyle(
+                    fontWeight: FontWeight.bold, fontSize: 13)),
             const SizedBox(height: 8),
             TextField(
               controller: _videoUrlCtrl,
@@ -1428,7 +1487,6 @@ class _AdsCardState extends State<AdsCard> {
               ),
             ),
             const SizedBox(height: 24),
-
             Row(
               children: [
                 Expanded(
@@ -1485,13 +1543,6 @@ class _AdsCardState extends State<AdsCard> {
             fit: BoxFit.cover, width: double.infinity, height: 120),
       );
     }
-    if (_imageFile != null) {
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(8),
-        child: Image.file(_imageFile!,
-            fit: BoxFit.cover, width: double.infinity, height: 120),
-      );
-    }
     final ad = controller.selectedAd.value;
     if (isEdit && (ad?.hasImage ?? false)) {
       return Stack(
@@ -1517,8 +1568,7 @@ class _AdsCardState extends State<AdsCard> {
                 borderRadius: BorderRadius.circular(6),
               ),
               child: const Text('Tap to replace',
-                  style:
-                  TextStyle(color: Colors.white, fontSize: 10)),
+                  style: TextStyle(color: Colors.white, fontSize: 10)),
             ),
           ),
         ],
@@ -1573,7 +1623,6 @@ class _AdsCardState extends State<AdsCard> {
                       style: const TextStyle(
                           fontSize: 22, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 16),
-
                   Row(
                     children: [
                       const Icon(Icons.calendar_today,
@@ -1584,7 +1633,6 @@ class _AdsCardState extends State<AdsCard> {
                               color: AppColor.textGrey, fontSize: 13)),
                     ],
                   ),
-
                   const SizedBox(height: 30),
                   SizedBox(
                     width: double.infinity,
@@ -1626,7 +1674,6 @@ class _AdsCardState extends State<AdsCard> {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              // Background Image shown initially or if no video
               if (ad.hasImage)
                 Image.network(
                   ad.image!,
@@ -1636,8 +1683,6 @@ class _AdsCardState extends State<AdsCard> {
                 )
               else
                 Container(color: AppColor.surface),
-
-              // Video Player
               if (!ad.hasVideo)
                 const SizedBox.shrink()
               else
@@ -1654,7 +1699,7 @@ class _AdsCardState extends State<AdsCard> {
       key: _playerKey,
       url: ad.videoUrl!,
       title: ad.title,
-      thumbnailUrl: ad.image, // ✅ Image passed to player for loading state
+      thumbnailUrl: ad.image,
       isFullscreen: _isFullscreen,
       onToggleFullscreen: () => _setFullscreen(!_isFullscreen),
     );

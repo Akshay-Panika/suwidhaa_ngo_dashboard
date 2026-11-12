@@ -38,7 +38,7 @@ dependencies:
   # ── Video Players (OTT / Classes ke liye) ──
   video_player: ^2.11.1
   chewie: ^1.7.1
-#  youtube_explode_dart: ^2.3.1
+  youtube_explode_dart: ^2.3.1
   youtube_player_iframe: ^6.0.2 # Recommended version for YouTube
 
   # ── Utilities ──

@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
@@ -21,7 +20,6 @@ class AdsRepository {
         .toList();
   }
 
-  // ✅ NEW: Get single ad details
   Future<AdsModel> getAdDetail(int id) async {
     final res = await _dio.get(ApiUrls.ngoAdsDetail(id));
     final body = res.data as Map<String, dynamic>;
@@ -33,7 +31,6 @@ class AdsRepository {
     String? videoUrl,
     String? navigateScreen,
     bool isActive = true,
-    File? imageFile,
     Uint8List? imageBytes,
     String? imageName,
   }) async {
@@ -43,11 +40,7 @@ class AdsRepository {
       if (navigateScreen != null && navigateScreen.isNotEmpty)
         'navigate_screen': navigateScreen,
       'is_active': isActive,
-      ...await _buildImageField(
-        imageFile: imageFile,
-        imageBytes: imageBytes,
-        imageName: imageName,
-      ),
+      ..._buildImageField(imageBytes: imageBytes, imageName: imageName),
     });
     final res = await _dio.post(ApiUrls.ngoAdsCreate, data: form);
     final body = res.data as Map<String, dynamic>;
@@ -60,7 +53,6 @@ class AdsRepository {
     String? videoUrl,
     String? navigateScreen,
     bool? isActive,
-    File? imageFile,
     Uint8List? imageBytes,
     String? imageName,
   }) async {
@@ -69,11 +61,7 @@ class AdsRepository {
       if (videoUrl != null) 'video_url': videoUrl,
       if (navigateScreen != null) 'navigate_screen': navigateScreen,
       if (isActive != null) 'is_active': isActive,
-      ...await _buildImageField(
-        imageFile: imageFile,
-        imageBytes: imageBytes,
-        imageName: imageName,
-      ),
+      ..._buildImageField(imageBytes: imageBytes, imageName: imageName),
     });
     final res = await _dio.put(ApiUrls.ngoAdsDetail(id), data: form);
     final body = res.data as Map<String, dynamic>;
@@ -84,20 +72,11 @@ class AdsRepository {
     await _dio.delete(ApiUrls.ngoAdsDetail(id));
   }
 
-  Future<Map<String, dynamic>> _buildImageField({
-    File? imageFile,
+  Map<String, dynamic> _buildImageField({
     Uint8List? imageBytes,
     String? imageName,
-  }) async {
-    if (imageFile != null) {
-      return {
-        'image': await MultipartFile.fromFile(
-          imageFile.path,
-          filename: imageFile.path.split(Platform.pathSeparator).last,
-        ),
-      };
-    }
-    if (imageBytes != null) {
+  }) {
+    if (imageBytes != null && imageBytes.isNotEmpty) {
       return {
         'image': MultipartFile.fromBytes(
           imageBytes,

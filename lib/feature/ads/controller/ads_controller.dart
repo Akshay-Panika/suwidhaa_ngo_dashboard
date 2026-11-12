@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
@@ -16,7 +15,6 @@ class AdsController extends GetxController {
   final RxString error = ''.obs;
   final RxBool isMutating = false.obs;
 
-  // ✅ NEW: Selected Ad state for View Panel
   final Rx<AdsModel?> selectedAd = Rx<AdsModel?>(null);
   final RxBool isDetailLoading = false.obs;
 
@@ -40,7 +38,6 @@ class AdsController extends GetxController {
     }
   }
 
-  // ✅ NEW: Fetch Detail API
   Future<void> fetchAdDetail(int id) async {
     try {
       isDetailLoading.value = true;
@@ -53,16 +50,13 @@ class AdsController extends GetxController {
     }
   }
 
-  void clearSelectedAd() {
-    selectedAd.value = null;
-  }
+  void clearSelectedAd() => selectedAd.value = null;
 
   Future<bool> createAd({
     required String title,
     String? videoUrl,
     String? navigateScreen,
     bool isActive = true,
-    File? imageFile,
     Uint8List? imageBytes,
     String? imageName,
   }) async {
@@ -73,7 +67,6 @@ class AdsController extends GetxController {
         videoUrl: videoUrl,
         navigateScreen: navigateScreen,
         isActive: isActive,
-        imageFile: imageFile,
         imageBytes: imageBytes,
         imageName: imageName,
       );
@@ -94,7 +87,6 @@ class AdsController extends GetxController {
     String? videoUrl,
     String? navigateScreen,
     bool? isActive,
-    File? imageFile,
     Uint8List? imageBytes,
     String? imageName,
   }) async {
@@ -106,18 +98,12 @@ class AdsController extends GetxController {
         videoUrl: videoUrl,
         navigateScreen: navigateScreen,
         isActive: isActive,
-        imageFile: imageFile,
         imageBytes: imageBytes,
         imageName: imageName,
       );
       final idx = ads.indexWhere((a) => a.id == id);
       if (idx != -1) ads[idx] = updated;
-
-      // Update selected ad if it's currently open
-      if (selectedAd.value?.id == id) {
-        selectedAd.value = updated;
-      }
-
+      if (selectedAd.value?.id == id) selectedAd.value = updated;
       FlutterToast.success('Ad updated successfully');
       return true;
     } catch (e) {
@@ -133,9 +119,7 @@ class AdsController extends GetxController {
       isMutating.value = true;
       await _repo.deleteAd(id);
       ads.removeWhere((a) => a.id == id);
-      if (selectedAd.value?.id == id) {
-        selectedAd.value = null;
-      }
+      if (selectedAd.value?.id == id) selectedAd.value = null;
       FlutterToast.success('Ad deleted');
       return true;
     } catch (e) {
