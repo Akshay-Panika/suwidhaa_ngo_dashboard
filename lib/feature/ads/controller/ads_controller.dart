@@ -24,11 +24,11 @@ class AdsController extends GetxController {
     fetchAds();
   }
 
-  Future<void> fetchAds({bool? isActive}) async {
+  Future<void> fetchAds({bool? isHome}) async {
     try {
       isLoading.value = true;
       error.value = '';
-      final list = await _repo.getAds(isActive: isActive);
+      final list = await _repo.getAds(isHome: isHome);
       ads.assignAll(list);
     } catch (e) {
       error.value = _parseError(e);
@@ -56,7 +56,7 @@ class AdsController extends GetxController {
     required String title,
     String? videoUrl,
     String? navigateScreen,
-    bool isActive = true,
+    bool isHome = false,
     Uint8List? imageBytes,
     String? imageName,
   }) async {
@@ -66,7 +66,7 @@ class AdsController extends GetxController {
         title: title,
         videoUrl: videoUrl,
         navigateScreen: navigateScreen,
-        isActive: isActive,
+        isHome: isHome,
         imageBytes: imageBytes,
         imageName: imageName,
       );
@@ -86,7 +86,7 @@ class AdsController extends GetxController {
     String? title,
     String? videoUrl,
     String? navigateScreen,
-    bool? isActive,
+    bool? isHome,
     Uint8List? imageBytes,
     String? imageName,
   }) async {
@@ -97,7 +97,7 @@ class AdsController extends GetxController {
         title: title,
         videoUrl: videoUrl,
         navigateScreen: navigateScreen,
-        isActive: isActive,
+        isHome: isHome,
         imageBytes: imageBytes,
         imageName: imageName,
       );

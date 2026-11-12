@@ -35,7 +35,7 @@ String? extractYoutubeId(String raw) {
 }
 
 // ═════════════════════════════════════════════════════════
-//  SELF-CONTAINED VIDEO PLAYER
+//  SELF-CONTAINED VIDEO PLAYER  (unchanged)
 // ═════════════════════════════════════════════════════════
 class _CachedStream {
   final String url;
@@ -87,7 +87,6 @@ class _AdsVideoPlayerState extends State<_AdsVideoPlayer> {
   void initState() {
     super.initState();
     if (_isWebYouTube) {
-      // Use youtube_player_iframe on web — no video_player init needed.
       _loading = false;
       return;
     }
@@ -635,15 +634,15 @@ class _WebYoutubePlayer extends StatefulWidget {
 }
 
 class _WebYoutubePlayerState extends State<_WebYoutubePlayer> {
-  late YoutubePlayerController _controller;   // ← Youtube, not YouTube
+  late YoutubePlayerController _controller;
 
   @override
   void initState() {
     super.initState();
-    _controller = YoutubePlayerController.fromVideoId(   // ← Youtube
+    _controller = YoutubePlayerController.fromVideoId(
       videoId: widget.videoId,
       autoPlay: false,
-      params: const YoutubePlayerParams(               // ← Youtube
+      params: const YoutubePlayerParams(
         showControls: true,
         showFullscreenButton: true,
         mute: false,
@@ -662,7 +661,7 @@ class _WebYoutubePlayerState extends State<_WebYoutubePlayer> {
     return Stack(
       fit: StackFit.expand,
       children: [
-        YoutubePlayer(                                  // ← Youtube
+        YoutubePlayer(
           controller: _controller,
           aspectRatio: 16 / 9,
         ),
@@ -686,6 +685,8 @@ class _WebYoutubePlayerState extends State<_WebYoutubePlayer> {
 }
 
 // ═════════════════════════════════════════════════════════
+//  ADS CARD
+// ═════════════════════════════════════════════════════════
 class AdsCard extends StatefulWidget {
   const AdsCard({super.key});
 
@@ -700,16 +701,15 @@ class _AdsCardState extends State<AdsCard> {
   bool isAdding = false;
   bool _isFullscreen = false;
 
-  // ── Image bytes (works on web & mobile) ──
+  bool _isHome = false;
+
   Uint8List? _imageBytes;
   String? _imageName;
 
-  // ── Text controllers ──
   final _titleCtrl = TextEditingController();
   final _videoUrlCtrl = TextEditingController();
   final _searchCtrl = TextEditingController();
 
-  // ── Filters ──
   String _searchQuery = '';
   int? _filterYear;
   int? _filterMonth;
@@ -759,15 +759,12 @@ class _AdsCardState extends State<AdsCard> {
     }
   }
 
-  // ═════════════════════════════════════════════════════════
-  //  IMAGE & DATE PICKERS
-  // ═════════════════════════════════════════════════════════
   Future<void> _pickImage() async {
     try {
       final res = await FilePicker.platform.pickFiles(
         type: FileType.image,
         allowMultiple: false,
-        withData: true, // ← bytes always available (web + mobile)
+        withData: true,
       );
       if (res == null || res.files.isEmpty) return;
       final f = res.files.single;
@@ -806,15 +803,13 @@ class _AdsCardState extends State<AdsCard> {
     }
   }
 
-  // ═════════════════════════════════════════════════════════
-  //  ACTIONS
-  // ═════════════════════════════════════════════════════════
   void _resetState() {
     if (_isFullscreen) _setFullscreen(false);
     controller.clearSelectedAd();
     setState(() {
       isEditing = false;
       isAdding = false;
+      _isHome = false;
       _imageBytes = null;
       _imageName = null;
       _titleCtrl.clear();
@@ -836,6 +831,7 @@ class _AdsCardState extends State<AdsCard> {
     setState(() {
       isAdding = true;
       isEditing = false;
+      _isHome = false;
       _imageBytes = null;
       _imageName = null;
       _titleCtrl.clear();
@@ -848,6 +844,7 @@ class _AdsCardState extends State<AdsCard> {
     setState(() {
       isAdding = false;
       isEditing = true;
+      _isHome = ad.isHome;
       _imageBytes = null;
       _imageName = null;
       _titleCtrl.text = ad.title;
@@ -881,7 +878,7 @@ class _AdsCardState extends State<AdsCard> {
       ok = await controller.createAd(
         title: title,
         videoUrl: hasVideo ? videoUrl : null,
-        isActive: true,
+        isHome: _isHome,
         imageBytes: _imageBytes,
         imageName: _imageName,
       );
@@ -891,6 +888,7 @@ class _AdsCardState extends State<AdsCard> {
         id: ad.id,
         title: title,
         videoUrl: videoUrl.isEmpty ? null : videoUrl,
+        isHome: _isHome,
         imageBytes: _imageBytes,
         imageName: _imageName,
       );
@@ -902,6 +900,7 @@ class _AdsCardState extends State<AdsCard> {
       setState(() {
         isAdding = false;
         isEditing = false;
+        _isHome = false;
         _imageBytes = null;
         _imageName = null;
         _titleCtrl.clear();
@@ -933,9 +932,6 @@ class _AdsCardState extends State<AdsCard> {
     if (controller.selectedAd.value == null) _resetState();
   }
 
-  // ═════════════════════════════════════════════════════════
-  //  BUILD
-  // ═════════════════════════════════════════════════════════
   @override
   Widget build(BuildContext context) {
     if (_isFullscreen && controller.selectedAd.value != null) {
@@ -1166,12 +1162,23 @@ class _AdsCardState extends State<AdsCard> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          ad.title,
-                          style: const TextStyle(
-                              fontWeight: FontWeight.bold, fontSize: 16),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                ad.title,
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            if (ad.isHome) ...[
+                              const SizedBox(width: 8),
+                              _homeBadge(),
+                            ],
+                          ],
                         ),
                         const SizedBox(height: 8),
                         Row(
@@ -1210,6 +1217,33 @@ class _AdsCardState extends State<AdsCard> {
           ),
         );
       },
+    );
+  }
+
+  Widget _homeBadge() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: Colors.green.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: Colors.green.withOpacity(0.4)),
+      ),
+      child: const Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.home_rounded, size: 11, color: Colors.green),
+          SizedBox(width: 3),
+          Text(
+            'HOME',
+            style: TextStyle(
+              fontSize: 9,
+              fontWeight: FontWeight.bold,
+              color: Colors.green,
+              letterSpacing: 0.5,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -1486,6 +1520,10 @@ class _AdsCardState extends State<AdsCard> {
                 ),
               ),
             ),
+
+            const SizedBox(height: 16),
+            _buildIsHomeToggle(),
+
             const SizedBox(height: 24),
             Row(
               children: [
@@ -1528,6 +1566,59 @@ class _AdsCardState extends State<AdsCard> {
                   }),
                 ),
               ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildIsHomeToggle() {
+    return InkWell(
+      onTap: () => setState(() => _isHome = !_isHome),
+      borderRadius: BorderRadius.circular(10),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.fromLTRB(14, 10, 10, 10),
+        decoration: BoxDecoration(
+          color: _isHome
+              ? Colors.green.withOpacity(0.08)
+              : AppColor.surface,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: _isHome ? Colors.green : Colors.transparent,
+            width: 1.2,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              _isHome ? Icons.home_rounded : Icons.home_outlined,
+              color: _isHome ? Colors.green : AppColor.textGrey,
+              size: 22,
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Show on Home Screen',
+                    style: TextStyle(
+                        fontWeight: FontWeight.bold, fontSize: 13),
+                  ),
+                  SizedBox(height: 2),
+                  Text(
+                    'Display this ad on the NGO home screen',
+                    style: TextStyle(fontSize: 11, color: AppColor.textGrey),
+                  ),
+                ],
+              ),
+            ),
+            Switch(
+              value: _isHome,
+              activeColor: Colors.green,
+              onChanged: (v) => setState(() => _isHome = v),
             ),
           ],
         ),
@@ -1623,6 +1714,7 @@ class _AdsCardState extends State<AdsCard> {
                       style: const TextStyle(
                           fontSize: 22, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 16),
+
                   Row(
                     children: [
                       const Icon(Icons.calendar_today,
@@ -1631,8 +1723,13 @@ class _AdsCardState extends State<AdsCard> {
                       Text(DateFormat('dd MMM yyyy').format(ad.createdAt),
                           style: const TextStyle(
                               color: AppColor.textGrey, fontSize: 13)),
+                      if (ad.isHome) ...[
+                        const SizedBox(width: 16),
+                        _homeBadge(),
+                      ],
                     ],
                   ),
+
                   const SizedBox(height: 30),
                   SizedBox(
                     width: double.infinity,

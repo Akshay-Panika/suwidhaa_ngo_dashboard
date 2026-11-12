@@ -8,10 +8,13 @@ import '../model/ads_model.dart';
 class AdsRepository {
   final Dio _dio = ApiClient.dio;
 
-  Future<List<AdsModel>> getAds({bool? isActive}) async {
+  Future<List<AdsModel>> getAds({bool? isHome}) async {
+    final params = <String, dynamic>{};
+    if (isHome != null) params['is_home'] = isHome;
+
     final res = await _dio.get(
       ApiUrls.ngoAdsList,
-      queryParameters: isActive == null ? null : {'is_active': isActive},
+      queryParameters: params.isEmpty ? null : params,
     );
     final body = res.data as Map<String, dynamic>? ?? {};
     final list = (body['data'] as List?) ?? const [];
@@ -30,7 +33,7 @@ class AdsRepository {
     required String title,
     String? videoUrl,
     String? navigateScreen,
-    bool isActive = true,
+    bool isHome = false,
     Uint8List? imageBytes,
     String? imageName,
   }) async {
@@ -39,7 +42,7 @@ class AdsRepository {
       if (videoUrl != null && videoUrl.isNotEmpty) 'video_url': videoUrl,
       if (navigateScreen != null && navigateScreen.isNotEmpty)
         'navigate_screen': navigateScreen,
-      'is_active': isActive,
+      'is_home': isHome,
       ..._buildImageField(imageBytes: imageBytes, imageName: imageName),
     });
     final res = await _dio.post(ApiUrls.ngoAdsCreate, data: form);
@@ -52,7 +55,7 @@ class AdsRepository {
     String? title,
     String? videoUrl,
     String? navigateScreen,
-    bool? isActive,
+    bool? isHome,
     Uint8List? imageBytes,
     String? imageName,
   }) async {
@@ -60,7 +63,7 @@ class AdsRepository {
       if (title != null) 'title': title,
       if (videoUrl != null) 'video_url': videoUrl,
       if (navigateScreen != null) 'navigate_screen': navigateScreen,
-      if (isActive != null) 'is_active': isActive,
+      if (isHome != null) 'is_home': isHome,
       ..._buildImageField(imageBytes: imageBytes, imageName: imageName),
     });
     final res = await _dio.put(ApiUrls.ngoAdsDetail(id), data: form);

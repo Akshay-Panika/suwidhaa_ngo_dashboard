@@ -4,7 +4,7 @@ class AdsModel {
   final String? image;
   final String? videoUrl;
   final String? navigateScreen;
-  final bool isActive;
+  final bool isHome;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -14,7 +14,7 @@ class AdsModel {
     this.image,
     this.videoUrl,
     this.navigateScreen,
-    required this.isActive,
+    this.isHome = false,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -26,7 +26,7 @@ class AdsModel {
       image: json['image'] as String?,
       videoUrl: json['video_url'] as String?,
       navigateScreen: json['navigate_screen'] as String?,
-      isActive: json['is_active'] == true,
+      isHome: json['is_home'] == true,
       createdAt: DateTime.tryParse((json['created_at'] ?? '').toString()) ??
           DateTime.now(),
       updatedAt: DateTime.tryParse((json['updated_at'] ?? '').toString()) ??
@@ -34,7 +34,6 @@ class AdsModel {
     );
   }
 
-  String get status => isActive ? 'Active' : 'Inactive';
   String get link => videoUrl ?? '';
   bool get hasImage => image != null && image!.isNotEmpty;
   bool get hasVideo => videoUrl != null && videoUrl!.isNotEmpty;
@@ -51,4 +50,26 @@ class AdsModel {
   }
 
   bool get isYouTube => youtubeId != null;
+
+  AdsModel copyWith({
+    int? id,
+    String? title,
+    String? image,
+    String? videoUrl,
+    String? navigateScreen,
+    bool? isHome,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) {
+    return AdsModel(
+      id: id ?? this.id,
+      title: title ?? this.title,
+      image: image ?? this.image,
+      videoUrl: videoUrl ?? this.videoUrl,
+      navigateScreen: navigateScreen ?? this.navigateScreen,
+      isHome: isHome ?? this.isHome,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
 }
